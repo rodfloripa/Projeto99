@@ -125,7 +125,7 @@ reduction_pct = (1 - var_cuped / var_cluster) * 100
 <p align="justify">O gráfico compara a distribuição da métrica no grupo de controle antes e depois da aplicação do CUPED. A distribuição ajustada aparece mais concentrada, indicando menor dispersão dos valores após o ajuste pela medida anterior ao experimento.</p>
 
 <p align="center">
-<img src="cuped.png" alt="Comparação da distribuição da métrica antes e depois do CUPED" width="800">
+<img src="https://github.com/rodfloripa/Projeto99/edit/main/cuped.png" alt="Comparação da distribuição da métrica antes e depois do CUPED" width="800">
 </p>
 
 <p align="justify"><b>Interpretação:</b> a distribuição azul, correspondente à métrica ajustada, é mais estreita do que a distribuição cinza, correspondente à métrica sem ajuste. Isso é coerente com a redução de variância calculada pelo código. O gráfico, por si só, mostra a distribuição do grupo de controle; a estimativa do efeito deve continuar sendo avaliada pela comparação entre tratamento e controle.</p>
