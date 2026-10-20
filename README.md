@@ -1,139 +1,71 @@
 # CUPED: Redução de Variância em Experimentos com Randomização por Grupos
 
-<p align="justify">Este projeto simula um experimento para medir o efeito de uma mudança sobre o engajamento de usuários. O código compara três abordagens: um experimento A/B individual que permite influência entre usuários, a atribuição do tratamento por grupos e a aplicação do CUPED para reduzir a variabilidade dos resultados. A simulação utiliza 10.000 usuários distribuídos em 300 grupos e define um efeito verdadeiro de 5 unidades.</p>
+<p align="justify">Este projeto simula um experimento A/B com influência entre usuários e compara três abordagens: teste A/B individual, randomização por grupos e randomização por grupos combinada com CUPED. O objetivo é estudar como o ajuste CUPED pode reduzir a dispersão dos dados e ajudar a obter estimativas mais estáveis do efeito do tratamento.</p>
 
-<p align="justify">O objetivo é demonstrar dois problemas importantes na avaliação de experimentos: a influência de usuários tratados sobre outros usuários do mesmo grupo e a variabilidade natural da métrica observada. A randomização por grupos procura evitar a mistura entre tratamento e controle dentro de um mesmo grupo, enquanto o CUPED utiliza uma medida anterior ao experimento para tornar o resultado menos variável.</p>
+## 1. Configuração da Simulação
 
-# 1. Configuração da Simulação
-
-<p align="justify">A simulação começa definindo a quantidade de usuários, o número de grupos e o efeito que se deseja recuperar. A variável <code>X_pre</code> representa o tempo de uso do aplicativo nos 14 dias anteriores ao experimento. Ela funciona como uma medida anterior ao tratamento, útil para explicar parte do comportamento observado depois.</p>
+<p align="justify">A simulação considera 10.000 usuários distribuídos em 300 grupos. O efeito verdadeiro do tratamento é definido como 5, enquanto a influência entre usuários (efeito de propagação) é definida como 3. Esses valores são conhecidos porque foram configurados diretamente no experimento simulado.</p>
 
 ```python
-np.random.seed(42)
-
-N_USERS = 10000
-N_CLUSTERS = 300
-TRUE_EFFECT = 5
-SPILLOVER_EFFECT = 3
-
-df = pd.DataFrame({
-    "user_id": range(N_USERS),
-    "cluster_id": np.random.choice(range(N_CLUSTERS), N_USERS),
-    "X_pre": np.random.normal(100, 20, N_USERS)
-})
+n_users = 10_000
+n_clusters = 300
+true_effect = 5
+spillover_effect = 3
 ```
 
-<p align="justify">A função <code>np.random.seed(42)</code> fixa a semente aleatória, permitindo reproduzir a simulação. O efeito verdadeiro é definido como 5. Já o efeito de influência entre usuários é definido como 3 e é usado no primeiro desenho para representar a contaminação entre participantes do mesmo grupo.</p>
+<p align="justify">O efeito verdadeiro igual a 5 funciona como referência para avaliar se os métodos conseguem estimar adequadamente o impacto do tratamento. O efeito de propagação representa a influência que usuários tratados podem exercer sobre outros usuários, o que pode distorcer um teste A/B quando a randomização é feita individualmente.</p>
 
-# 2. Experimento A/B Individual e Influência entre Usuários
+## 2. Experimento A/B Individual e Influência entre Usuários
 
-<p align="justify">No primeiro desenho, cada usuário recebe aleatoriamente o tratamento ou o controle. Em seguida, o código calcula a proporção de usuários tratados em cada grupo e adiciona essa influência à métrica observada. Assim, o resultado de uma pessoa pode depender não apenas de seu próprio tratamento, mas também da situação dos demais integrantes do grupo.</p>
+<p align="justify">No teste A/B individual, os usuários são distribuídos entre controle e tratamento. Quando existe influência entre usuários, a comparação pode misturar o efeito direto da intervenção com o efeito de propagação. Na execução registrada, o método ingênuo estimou um efeito de 6,14, acima do efeito verdadeiro de 5, indicando viés nessa simulação.</p>
+
+## 3. Randomização por Grupos
+
+<p align="justify">Na randomização por grupos, os usuários de um mesmo grupo recebem a mesma condição experimental. Essa estratégia ajuda a lidar com a influência entre pessoas do mesmo grupo. Na simulação, o método estimou um efeito de 4,88, próximo do valor verdadeiro de 5.</p>
+
+## 4. Redução de Variância com CUPED
+
+<p align="justify">O CUPED utiliza uma variável auxiliar relacionada à métrica de interesse para ajustar os resultados. Quando essa variável ajuda a explicar diferenças entre usuários, o ajuste pode reduzir a dispersão dos valores observados.</p>
 
 ```python
-df["treatment_naive"] = np.random.binomial(1, 0.5, N_USERS)
-
-cluster_treat_pct = (
-    df.groupby("cluster_id")["treatment_naive"].mean().to_dict()
-)
-df["cluster_treat_pct"] = df["cluster_id"].map(cluster_treat_pct)
-
-df["Y_naive"] = (
-    df["X_pre"] * 0.8
-    + np.random.normal(0, 10, N_USERS)
-    + df["treatment_naive"] * TRUE_EFFECT
-    + df["cluster_treat_pct"] * SPILLOVER_EFFECT
-)
+# Forma geral do ajuste CUPED:
+# Y ajustado = Y observado - theta * (X - média de X)
+Y_cuped = Y - theta * (X - X_mean)
 ```
 
-<p align="justify">Esse desenho viola a hipótese de que o resultado de um usuário não é afetado pelo tratamento recebido por outros participantes. Na simulação, a estimativa do efeito foi de <b>6,14</b>, acima do efeito verdadeiro de 5. A diferença ilustra como a influência entre usuários pode distorcer a interpretação do experimento.</p>
+<p align="justify">Na execução registrada, a combinação de randomização por grupos com CUPED estimou um efeito de 4,93, também próximo do valor verdadeiro de 5. A variância calculada dos valores individuais da métrica passou de 358,8 para 104,1, uma redução de aproximadamente 71%.</p>
 
-# 3. Randomização por Grupos
+## 5. Resultados da Simulação
 
-<p align="justify">Na segunda abordagem, o tratamento é sorteado para cada grupo inteiro. Todos os usuários de um mesmo grupo ficam na mesma condição experimental. Isso reduz o risco de misturar usuários tratados e não tratados dentro do mesmo grupo, que é justamente a fonte de influência simulada no primeiro desenho.</p>
-
-```python
-cluster_treatment = {
-    c: np.random.binomial(1, 0.5)
-    for c in range(N_CLUSTERS)
-}
-df["treatment_cluster"] = df["cluster_id"].map(cluster_treatment)
-
-df["Y_cluster"] = (
-    df["X_pre"] * 0.8
-    + np.random.normal(0, 10, N_USERS)
-    + df["treatment_cluster"] * TRUE_EFFECT
-)
-```
-
-<p align="justify">Com essa abordagem, o efeito estimado foi de <b>4,88</b>, próximo do valor verdadeiro de 5. O resultado sugere que a randomização por grupos resolveu o viés introduzido pela influência entre participantes nesta simulação. Em aplicações reais, a análise também deve considerar que usuários do mesmo grupo podem ter resultados correlacionados.</p>
-
-# 4. Redução de Variância com CUPED
-
-<p align="justify">O CUPED ajusta a métrica observada usando uma variável anterior ao experimento que esteja relacionada ao resultado. Neste caso, <code>X_pre</code> representa o tempo de uso do aplicativo antes da intervenção. O ajuste procura remover da métrica posterior a parcela associada a essa característica anterior, preservando a possibilidade de estimar o efeito do tratamento com menor variabilidade.</p>
-
-```python
-control_mask = df["treatment_cluster"] == 0
-
-cov_yx = np.cov(
-    df.loc[control_mask, "Y_cluster"],
-    df.loc[control_mask, "X_pre"]
-)[0, 1]
-
-var_x = df["X_pre"].var()
-theta = cov_yx / var_x
-
-X_mean = df["X_pre"].mean()
-df["Y_cuped"] = (
-    df["Y_cluster"] - theta * (df["X_pre"] - X_mean)
-)
-```
-
-<p align="justify">O parâmetro <code>theta</code> determina a intensidade do ajuste. No código, a covariância entre o resultado e a medida anterior é calculada no grupo de controle, enquanto a variância usada no denominador e a média de referência são calculadas sobre todos os usuários. Para uma implementação metodologicamente mais rigorosa, essas escolhas devem ser definidas de forma consistente com o desenho experimental e com o protocolo de análise.</p>
-
-<p align="justify">A ideia central é que, se a medida anterior explica parte da variação do resultado, subtrair sua contribuição pode aproximar os valores de uma faixa mais estreita. O CUPED não substitui a randomização: ele é uma técnica complementar para melhorar a precisão da estimativa.</p>
-
-# 5. Avaliação dos Resultados
-
-<p align="justify">A função <code>evaluate</code> calcula a diferença entre a média do grupo tratado e a média do grupo de controle, além da variância dos valores da métrica. A diferença entre médias é usada como estimativa do efeito do tratamento.</p>
-
-```python
-def evaluate(y_col, treat_col):
-    treat = df[df[treat_col] == 1][y_col].mean()
-    control = df[df[treat_col] == 0][y_col].mean()
-    variance = df[y_col].var()
-    return treat - control, variance
-
-eff_naive, var_naive = evaluate("Y_naive", "treatment_naive")
-eff_cluster, var_cluster = evaluate("Y_cluster", "treatment_cluster")
-eff_cuped, var_cuped = evaluate("Y_cuped", "treatment_cluster")
-
-reduction_pct = (1 - var_cuped / var_cluster) * 100
-```
-
-<p align="justify">A execução do código produziu os seguintes resultados:</p>
-
-| Abordagem | Efeito estimado | Variância da métrica |
+| Abordagem | Efeito estimado | Variância dos valores individuais da métrica |
 |---|---:|---:|
-| Experimento A/B individual com influência entre usuários | 6,14 | — |
+| A/B individual ingênuo | 6,14 | — |
 | Randomização por grupos | 4,88 | 358,8 |
-| Randomização por grupos com CUPED | 4,93 | 104,1 |
+| Randomização por grupos + CUPED | 4,93 | 104,1 |
 
-<p align="justify">A variância da primeira abordagem não foi apresentada no resultado impresso. Para as duas abordagens por grupos, o cálculo indica redução de variância de aproximadamente <b>71,0%</b> após o ajuste CUPED. A estimativa do efeito também permaneceu próxima do valor verdadeiro: passou de 4,88 para 4,93, diante de um efeito definido de 5.</p>
+<p align="justify">Os resultados mostram que, nesta simulação, o A/B individual produziu uma estimativa acima do efeito verdadeiro, enquanto os métodos com randomização por grupos ficaram próximos de 5. O CUPED também reduziu a variância dos valores individuais da métrica de 358,8 para 104,1, o que indica menor dispersão desses valores após o ajuste.</p>
 
-# 6. Gráfico da Redução de Variância
+## 6. Como Interpretar a Redução de 71%
 
-<p align="justify">O gráfico compara a distribuição da métrica no grupo de controle antes e depois da aplicação do CUPED. A distribuição ajustada aparece mais concentrada, indicando menor dispersão dos valores após o ajuste pela medida anterior ao experimento.</p>
+<p align="justify">É importante distinguir duas medidas. A variância dos valores individuais indica o quanto os dados dos usuários estão espalhados em torno da média. Já a variância ou o erro-padrão da estimativa do efeito indica o quanto o resultado do experimento poderia variar se o teste fosse repetido com novas amostras.</p>
+
+<p align="justify">Portanto, a redução de aproximadamente 71% observada neste código se refere à variância dos valores individuais da métrica. Ela não significa, por si só, que a incerteza da estimativa do efeito também caiu 71%. Para demonstrar diretamente esse ganho de precisão, seria necessário calcular a variância ou o erro-padrão da diferença entre os grupos, respeitando a estrutura de randomização por grupos, e idealmente comparar intervalos de confiança.</p>
+
+<p align="justify">Em termos simples: o código mostra que, depois do CUPED, os valores individuais ficaram menos dispersos. Ainda falta medir diretamente quanto isso tornou mais preciso o resultado final do experimento. Essa ressalva não invalida a simulação; apenas delimita corretamente o que os números demonstram.</p>
+
+## 7. Gráfico da Redução de Variância
+
+<p align="justify">Insira abaixo o gráfico produzido pelo notebook. Para que ele apareça no GitHub, mantenha o arquivo de imagem na mesma pasta deste relatório ou ajuste o caminho conforme a estrutura do repositório.</p>
 
 <p align="center">
 <img src="https://github.com/rodfloripa/Projeto99/blob/main/cuped.png" alt="Comparação da distribuição da métrica antes e depois do CUPED" width="800">
 </p>
 
-<p align="justify"><b>Interpretação:</b> a distribuição azul, correspondente à métrica ajustada, é mais estreita do que a distribuição cinza, correspondente à métrica sem ajuste. Isso é coerente com a redução de variância calculada pelo código. O gráfico, por si só, mostra a distribuição do grupo de controle; a estimativa do efeito deve continuar sendo avaliada pela comparação entre tratamento e controle.</p>
+## 8. Conclusão
 
-# 7. Conclusão
+<p align="justify">Nesta simulação, a randomização por grupos produziu uma estimativa de efeito próxima do valor verdadeiro, reduzindo o problema de viés associado à influência entre usuários. A aplicação do CUPED diminuiu em aproximadamente 71% a variância calculada dos valores individuais da métrica e manteve a estimativa do efeito próxima de 5: o resultado foi 4,93.</p>
 
-<p align="justify">A simulação mostra que o experimento A/B individual pode superestimar o efeito quando há influência entre usuários: a estimativa foi de 6,14, apesar de o efeito verdadeiro ser 5. A randomização por grupos produziu uma estimativa de 4,88, mais próxima do valor definido na simulação, pois manteve cada grupo na mesma condição experimental.</p>
+<p align="justify">A conclusão correta é que o CUPED reduziu a dispersão da métrica nesta simulação. Para afirmar quantitativamente que houve uma melhora equivalente na precisão da estimativa do efeito, o próximo passo é calcular e comparar os erros-padrão ou intervalos de confiança dos efeitos estimados, considerando a randomização por grupos.</p>
 
-<p align="justify">O principal resultado é que <b>a combinação de randomização por grupos com CUPED apresentou o melhor equilíbrio entre estimativa do efeito e variabilidade</b>. Com CUPED, a estimativa passou de 4,88 para 4,93, permanecendo próxima do efeito verdadeiro de 5, enquanto a variância da métrica caiu de 358,8 para 104,1, uma redução aproximada de 71,0%.</p>
+</p>
 
-<p align="justify">Esses números demonstram o potencial do ajuste, mas devem ser interpretados no contexto da simulação. A variância calculada pelo código é a variância dos valores individuais da métrica, não diretamente a variância ou o erro-padrão da estimativa do efeito entre grupos. Para uma análise experimental completa, recomenda-se calcular intervalos de confiança e erros-padrão que respeitem a randomização por grupos, além de avaliar a robustez dos resultados em diferentes simulações.</p>
