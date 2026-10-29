@@ -2,7 +2,67 @@
 
 # CUPED: Redução de Variância em Experimentos com Randomização por Grupos
 
-<p align="justify">Este projeto simula um experimento A/B com influência entre usuários e compara três abordagens: teste A/B individual, randomização por grupos e randomização por grupos combinada com CUPED. A versão atual do código também calcula uma estimativa aproximada do erro-padrão do efeito, considerando os grupos de randomização, para avaliar não apenas a dispersão dos dados individuais, mas também a incerteza do resultado do experimento.</p>
+<p align="justify">Este projeto simula um experimento A/B com influência entre usuários e compara três abordagens: teste A/B individual, randomização por grupos e randomização por grupos combinada com CUPED. A versão atual do código também calcula uma estimativa aproximada do erro-padrão do efeito, considerando os grupos de randomização, para avaliar não apenas a dispersão dos dados individuais, mas também a incerteza do resultado do experimento.
+
+<p align="justify">CUPED(Controlled-Experiments Using Pre-Experiment Data) é um método pós-processamento introduzido por pesquisadores da Microsoft para reduzir a variância dos estimadores do efeito de tratamento.</p>
+
+<p align="justify">Em testes A/B clássicos, as métricas de interesse (ex: receita por usuário, sessões por usuário) apresentam alta variância natural, o que exige amostras massivas ou longos períodos de execução para atingir significância estatística.</p>
+
+## Como o CUPED Funciona (Controlled-Experiments Using Pre-Experiment Data)
+
+<p align="justify">O CUPED (desenvolvido pela Microsoft) remove a variação não explicada do comportamento do usuário utilizando dados históricos (pré-experimento) para aumentar o poder estatístico de testes A/B.</p>
+
+### 1. A Lógica Intuitiva
+
+<p align="justify">Imagine que estamos testando um novo recurso para aumentar o consumo de créditos em um app.</p>
+
+<p align="justify">- O usuário João gasta naturalmente R$ 100 por semana. No teste, ele gastou R$ 110. (Variação: +10)</p>
+<p align="justify">- O usuário Maria gasta naturalmente R$ 10 por semana. No teste, ela gastou R$ 15. (Variação: +5)</p>
+
+<p align="justify">Se olharmos apenas para o resultado bruto do teste, a variabilidade entre o João e a Maria é enorme. O CUPED percebe que o João já gastava muito antes do teste começar. Ele usa essa informação prévia para "ajustar" o valor observado, isolando o efeito real do tratamento e removendo o ruído da linha de base de cada indivíduo.</p>
+
+### 2. O Passo a Passo Matemático
+
+<p align="justify">1. <strong>Coleta de Covariável ($X$):</strong> Coleta-se a métrica de interesse no período pré-experimento para cada usuário (ex: 14 dias antes do teste).</p>
+
+<p align="justify">2. <strong>Métrica Pós-Experimento ($Y$):</strong> Coleta-se a métrica durante o teste.</p>
+
+<p align="justify">3. <strong>Cálculo do Ajuste ($\theta$):</strong> Calcula-se o coeficiente de regressão linear entre a métrica do teste e a métrica pré-teste para capturar a dependência linear e minimizar a variância residual:</p>
+
+$$
+\theta = \frac{\text{Cov}(Y, X)}{\text{Var}(X)}
+$$
+
+<p align="justify">4. <strong>Aplicação da Fórmula Ajustada:</strong></p>
+
+$$
+\tilde{Y}_{i} = Y_{i} - \theta (X_{i} - \mathbb{E}[X])
+$$
+
+<p align="justify">Onde:</p>
+
+<p align="justify">- $\tilde{Y}_{i}$ é a nova métrica ajustada do usuário $i$.</p>
+<p align="justify">- $Y_{i}$ é o valor observado no teste.</p>
+<p align="justify">- $X_{i}$ é o valor pré-teste do usuário.</p>
+<p align="justify">- $\mathbb{E}[X]$ é a média global da métrica pré-teste na população.</p>
+
+### 3. Por que funciona?
+
+<p align="justify">Como o termo ajustado remove a variação que já existia antes do experimento, a variância do erro residual ($\text{Var}(\tilde{Y})$) diminui em proporção ao quadrado da correlação:</p>
+
+$$
+\text{Var}(\tilde{Y}) = \text{Var}(Y) \cdot (1 - \rho^2)
+$$
+
+<p align="justify">Onde $\rho$ é a correlação entre a métrica pré-experimento ($X$) e a métrica pós-experimento ($Y$). Quanto mais correlacionados forem o antes e o depois (o que é muito comum em métricas de comportamento de usuário), maior é a redução da variância — o que reduz drasticamente o tamanho de amostra ou o tempo necessário para atingir significância estatística.</p>
+
+#### 4. Principais Benefícios do CUPED:
+
+Redução no tamanho da amostra / tempo: Pode reduzir o tempo de execução de um teste A/B em até 30%–50% mantendo o mesmo poder estatístico ($1 - \beta$).
+
+Aumento de Sensibilidade: Consegue detectar Efeitos Médios de Tratamento (ATE) muito menores sem alterar o erro do Tipo I ($\alpha$).
+
+</p>
 
 ## 1. Configuração da Simulação
 
